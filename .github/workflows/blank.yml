@@ -1,36 +1,58 @@
-# This is a basic workflow to help you get started with Actions
 
-name: CI
+name: Build John's Gospel Trivia APK
 
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+permissions:
+  contents: read
+
 jobs:
-  # This workflow contains a single job called "build"
   build:
-    # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v5
+      - name: Checkout repository
+        uses: actions/checkout@v5
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
 
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
+      - name: Extract Flutter project
+        id: extract
         run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+          mkdir -p app
+          unzip -q john_gospel_trivia_flutter_project.zip -d app
+
+          PUBSPEC=$(find app -name pubspec.yaml -print -quit)
+
+          if [ -z "$PUBSPEC" ]; then
+            echo "ERROR: pubspec.yaml not found in ZIP"
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$PUBSPEC")
+          echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+        working-directory: ${{ steps.extract.outputs.project_dir }}
+
+      - name: Build Android APK
+        run: flutter build apk --release
+        working-directory: ${{ steps.extract.outputs.project_dir }}
+
+      - name: Prepare APK
+        run: |
+          cp "${{ steps.extract.outputs.project_dir }}/build/app/outputs/flutter-apk/app-release.apk" john-gospel-trivia.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: john-gospel-trivia-apk
+          path: john-gospel-trivia.apk
