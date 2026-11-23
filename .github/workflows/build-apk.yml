@@ -22,7 +22,7 @@ jobs:
           channel: stable
 
       - name: Generate Android platform files
-        run: flutter create . --platforms android --org org.bibletrivia
+        run: flutter create . --project-name john_s_gospel_trivia --platforms android --org org.bibletrivia
 
       - name: Get dependencies
         run: flutter pub get
