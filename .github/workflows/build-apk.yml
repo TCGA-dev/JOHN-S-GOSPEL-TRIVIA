@@ -1,10 +1,10 @@
-
 name: Build John's Gospel Trivia APK
 
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -12,6 +12,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -21,18 +22,45 @@ jobs:
         with:
           channel: stable
 
-      - name: Generate Android platform files
-        run: flutter create . --project-name john_s_gospel_trivia --platforms android --org org.bibletrivia
+      - name: Extract Flutter project
+        id: extract
+        run: |
+          mkdir -p app
+          unzip -q john_gospel_trivia_flutter_project.zip -d app
+          PUBSPEC=$(find app -name pubspec.yaml -print -quit)
+          if [ -z "$PUBSPEC" ]; then
+            echo "ERROR: pubspec.yaml not found in ZIP"
+            exit 1
+          fi
+          PROJECT_DIR=$(dirname "$PUBSPEC")
+          echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
-      - name: Get dependencies
+      - name: Generate Android platform files without losing app source
+        working-directory: ${{ steps.extract.outputs.project_dir }}
+        run: |
+          cp lib/main.dart /tmp/john-main.dart
+          cp pubspec.yaml /tmp/john-pubspec.yaml
+          mkdir -p /tmp/john-assets
+          cp -a assets/. /tmp/john-assets/
+
+          flutter create . --project-name john_gospel_trivia --platforms android --org org.bibletrivia
+
+          cp /tmp/john-main.dart lib/main.dart
+          cp /tmp/john-pubspec.yaml pubspec.yaml
+          rm -rf assets
+          mkdir -p assets
+          cp -a /tmp/john-assets/. assets/
+
+      - name: Get Flutter dependencies
+        working-directory: ${{ steps.extract.outputs.project_dir }}
         run: flutter pub get
 
       - name: Build release APK
+        working-directory: ${{ steps.extract.outputs.project_dir }}
         run: flutter build apk --release
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: john-gospel-trivia-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
-          
+          path: ${{ steps.extract.outputs.project_dir }}/build/app/outputs/flutter-apk/app-release.apk
